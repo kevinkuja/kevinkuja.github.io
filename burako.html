@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contador de Puntos de Fichas Burako</title>
+    <script src="https://docs.opencv.org/4.5.2/opencv.js"></script>
+    <script src="https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js"></script>
+    <style>
+        #imageCanvas { max-width: 100%; border: 1px solid black; }
+    </style>
+</head>
+<body>
+    <h1>Contador de Puntos de Fichas Burako</h1>
+    <input type="file" id="imageInput" accept="image/*">
+    <br><br>
+    <canvas id="imageCanvas"></canvas>
+    <br><br>
+    <button id="processButton">Procesar Imagen</button>
+    <p id="result"></p>
+
+    <script>
+        let img;
+
+        document.getElementById('imageInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                img = new Image();
+                img.onload = function() {
+                    const canvas = document.getElementById('imageCanvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    canvas.getContext('2d').drawImage(img, 0, 0, img.width, img.height);
+                }
+                img.src = event.target.result;
+            }
+            reader.readAsDataURL(file);
+        });
+
+        document.getElementById('processButton').addEventListener('click', async () => {
+            if (!img) {
+                alert('Por favor, selecciona una imagen primero.');
+                return;
+            }
+
+            const canvas = document.getElementById('imageCanvas');
+            const ctx = canvas.getContext('2d');
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+            const tokens = detectTokens(imageData);
+            const results = await analyzeTokens(tokens, imageData);
+            const totalPoints = calculateTotalPoints(results);
+
+            displayResults(results, totalPoints);
+        });
+
+        function detectTokens(imageData) {
+            let src = cv.matFromImageData(imageData);
+            let dst = new cv.Mat();
+            let contours = new cv.MatVector();
+            let hierarchy = new cv.Mat();
+
+            cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
+            cv.threshold(dst, dst, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU);
+            cv.findContours(dst, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+            let tokens = [];
+            for (let i = 0; i < contours.size(); ++i) {
+                let contour = contours.get(i);
+                let area = cv.contourArea(contour);
+                if (area > 1000 && area < 10000) {  // Ajusta estos valores según el tamaño de tus fichas
+                    let rect = cv.boundingRect(contour);
+                    tokens.push({rect: rect});
+                }
+            }
+
+            src.delete(); dst.delete(); contours.delete(); hierarchy.delete();
+            return tokens;
+        }
+
+        async function recognizeNumber(img, rect) {
+            let roi = img.roi(rect);
+            let canvas = document.createElement('canvas');
+            cv.imshow(canvas, roi);
+            roi.delete();
+
+            const result = await Tesseract.recognize(canvas, 'eng', { 
+                logger: m => console.log(m)
+            });
+            return parseInt(result.data.text.trim());
+        }
+
+        async function analyzeTokens(tokens, imageData) {
+            let src = cv.matFromImageData(imageData);
+            let results = [];
+            for (let token of tokens) {
+                let number = await recognizeNumber(src, token.rect);
+                if (!isNaN(number)) {
+                    results.push({number: number});
+                }
+            }
+            src.delete();
+            return results;
+        }
+
+        function calculateTotalPoints(tokens) {
+            return tokens.reduce((sum, token) => sum + token.number, 0);
+        }
+
+        function displayResults(results, totalPoints) {
+            let resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = `
+                <h2>Resultados:</h2>
+                <ul>
+                    ${results.map(token => `
+                        <li>Ficha: ${token.number}</li>
+                    `).join('')}
+                </ul>
+                <h3>Total de puntos: ${totalPoints}</h3>
+            `;
+        }
+    </script>
+</body>
+</html>
