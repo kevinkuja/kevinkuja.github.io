@@ -1,30 +1,32 @@
 let players = [];
-let currentCourt = 23;
+
+document.getElementById('playerForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    addPlayer(
+        document.getElementById('name').value,
+        document.getElementById('preferredTime').value,
+        document.getElementById('playSingles').checked
+    );
+    this.reset();
+});
 
 document.getElementById('bulkPlayerForm').addEventListener('submit', function(e) {
     e.preventDefault();
     const bulkText = document.getElementById('bulkPlayers').value;
     const lines = bulkText.split('\n');
-    players = []; // Limpiar la lista de jugadores existente
     lines.forEach(line => {
-        const cleanedLine = line.replace(/^\d+\.?\s*/, '').trim();
-        if (cleanedLine) {
-            const parts = cleanedLine.split(/\s+/);
-            let name = parts[0];
-            let preferredTime = '';
-            let playSingles = false;
-
-            if (parts.length > 1 && !parts[1].match(/^\d/)) {
-                name += ' ' + parts[1];
-                parts.splice(1, 1);
+        const parts = line.trim().split(/\s+/);
+        if (parts.length > 0) {
+            const name = parts[0];
+            let preferredTime = parts.length > 1 ? parts[1] : '';
+            let playSingles = parts[parts.length - 1].toLowerCase() === 'single';
+            
+            // Si el último elemento es 'single', y hay más de 2 partes, el tiempo está en la segunda posición
+            if (playSingles && parts.length > 2) {
+                preferredTime = parts[1];
             }
-
-            if (parts[parts.length - 1].toLowerCase() === 'single') {
-                playSingles = true;
-                parts.pop();
-            }
-
-            if (parts.length > 1) {
+            // Si no es 'single' y hay más de una parte, el tiempo es el último elemento
+            else if (!playSingles && parts.length > 1) {
                 preferredTime = parts[parts.length - 1];
             }
 
@@ -42,12 +44,26 @@ function addPlayer(name, preferredTime, playSingles) {
 function updatePlayerList() {
     const playerList = document.getElementById('playerList');
     playerList.innerHTML = '';
-    players.forEach((player, index) => {
+    players.forEach(player => {
         const li = document.createElement('li');
-        li.textContent = `${index + 1}. ${player.name} - Horario: ${player.preferredTime || 'No especificado'} - ${player.playSingles ? 'Juega singles' : 'No juega singles'}`;
+        li.textContent = `${player.name} - Horario: ${player.preferredTime || 'No especificado'} - ${player.playSingles ? 'Juega singles' : 'No juega singles'}`;
         playerList.appendChild(li);
     });
 }
+
+document.getElementById('toggleInput').addEventListener('click', function() {
+    const playerForm = document.getElementById('playerForm');
+    const bulkPlayerForm = document.getElementById('bulkPlayerForm');
+    if (playerForm.style.display === 'none') {
+        playerForm.style.display = 'block';
+        bulkPlayerForm.style.display = 'none';
+        this.textContent = 'Cambiar a entrada masiva';
+    } else {
+        playerForm.style.display = 'none';
+        bulkPlayerForm.style.display = 'block';
+        this.textContent = 'Cambiar a entrada individual';
+    }
+});
 
 document.getElementById('organizeMatches').addEventListener('click', organizeMatches);
 
@@ -58,7 +74,6 @@ function organizeMatches() {
 
     const matchesDiv = document.getElementById('matches');
     matchesDiv.innerHTML = '';
-    currentCourt = 23;
 
     // Organizar partidos de dobles
     while (doubles.length >= 4) {
@@ -87,21 +102,10 @@ function organizeMatches() {
 
 function addMatch(container, players, type) {
     const div = document.createElement('div');
-    const court = assignCourt(players);
-    div.innerHTML = `<h3>Partido de ${type} - Cancha ${court}</h3>
+    div.innerHTML = `<h3>Partido de ${type}</h3>
                      <p>${players.map(p => p.name).join(' vs ')}</p>
                      <p>Horario sugerido: ${suggestTime(players)}</p>`;
     container.appendChild(div);
-}
-
-function assignCourt(players) {
-    if (players.some(p => p.name.toLowerCase().startsWith('dan'))) {
-        return 23;
-    } else {
-        const court = currentCourt;
-        currentCourt = currentCourt > 1 ? currentCourt - 1 : 1;
-        return court;
-    }
 }
 
 function suggestTime(players) {
