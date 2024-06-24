@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organizador de Partidos de Tenis</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Organizador de Partidos de Tenis</h1>
+        <form id="playerForm">
+            <input type="text" id="name" placeholder="Nombre" required>
+            <input type="text" id="preferredTime" placeholder="Horario preferido">
+            <label>
+                <input type="checkbox" id="playSingles"> Dispuesto a jugar singles
+            </label>
+            <button type="submit">Agregar Jugador</button>
+        </form>
+        <ul id="playerList"></ul>
+        <button id="organizeMatches">Organizar Partidos</button>
+        <div id="matches"></div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
