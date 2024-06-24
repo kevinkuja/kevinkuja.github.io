@@ -2,15 +2,31 @@ let players = [];
 
 document.getElementById('playerForm').addEventListener('submit', function(e) {
     e.preventDefault();
-    const name = document.getElementById('name').value;
-    const preferredTime = document.getElementById('preferredTime').value;
-    const playSingles = document.getElementById('playSingles').checked;
-
-    players.push({ name, preferredTime, playSingles });
-
-    updatePlayerList();
+    addPlayer(
+        document.getElementById('name').value,
+        document.getElementById('preferredTime').value,
+        document.getElementById('playSingles').checked
+    );
     this.reset();
 });
+
+document.getElementById('bulkPlayerForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const bulkText = document.getElementById('bulkPlayers').value;
+    const lines = bulkText.split('\n');
+    lines.forEach(line => {
+        const [name, preferredTime, playSinglesStr] = line.split(',').map(s => s.trim());
+        if (name) {
+            addPlayer(name, preferredTime, playSinglesStr.toLowerCase() === 'sí' || playSinglesStr.toLowerCase() === 'si');
+        }
+    });
+    this.reset();
+});
+
+function addPlayer(name, preferredTime, playSingles) {
+    players.push({ name, preferredTime, playSingles });
+    updatePlayerList();
+}
 
 function updatePlayerList() {
     const playerList = document.getElementById('playerList');
@@ -21,6 +37,20 @@ function updatePlayerList() {
         playerList.appendChild(li);
     });
 }
+
+document.getElementById('toggleInput').addEventListener('click', function() {
+    const playerForm = document.getElementById('playerForm');
+    const bulkPlayerForm = document.getElementById('bulkPlayerForm');
+    if (playerForm.style.display === 'none') {
+        playerForm.style.display = 'block';
+        bulkPlayerForm.style.display = 'none';
+        this.textContent = 'Cambiar a entrada masiva';
+    } else {
+        playerForm.style.display = 'none';
+        bulkPlayerForm.style.display = 'block';
+        this.textContent = 'Cambiar a entrada individual';
+    }
+});
 
 document.getElementById('organizeMatches').addEventListener('click', organizeMatches);
 

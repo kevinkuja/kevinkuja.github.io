@@ -9,14 +9,21 @@
 <body>
     <div class="container">
         <h1>Organizador de Partidos de Tenis</h1>
-        <form id="playerForm">
-            <input type="text" id="name" placeholder="Nombre" required>
-            <input type="text" id="preferredTime" placeholder="Horario preferido">
-            <label>
-                <input type="checkbox" id="playSingles"> Dispuesto a jugar singles
-            </label>
-            <button type="submit">Agregar Jugador</button>
-        </form>
+        <div class="input-methods">
+            <button id="toggleInput">Cambiar método de entrada</button>
+            <form id="playerForm">
+                <input type="text" id="name" placeholder="Nombre" required>
+                <input type="text" id="preferredTime" placeholder="Horario preferido">
+                <label>
+                    <input type="checkbox" id="playSingles"> Dispuesto a jugar singles
+                </label>
+                <button type="submit">Agregar Jugador</button>
+            </form>
+            <form id="bulkPlayerForm" style="display:none;">
+                <textarea id="bulkPlayers" rows="10" placeholder="Ingrese jugadores en formato: Nombre, Horario preferido, Juega singles (sí/no)&#10;Ejemplo:&#10;Juan Pérez, 18:00, sí&#10;María García, 19:00, no"></textarea>
+                <button type="submit">Agregar Jugadores</button>
+            </form>
+        </div>
         <ul id="playerList"></ul>
         <button id="organizeMatches">Organizar Partidos</button>
         <div id="matches"></div>

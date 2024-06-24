@@ -24,7 +24,7 @@ form {
     margin-bottom: 20px;
 }
 
-input[type="text"], button {
+input[type="text"], button, textarea {
     width: 100%;
     padding: 10px;
     margin-bottom: 10px;
@@ -54,4 +54,8 @@ li {
 
 #matches {
     margin-top: 20px;
+}
+
+#toggleInput {
+    margin-bottom: 10px;
 }
