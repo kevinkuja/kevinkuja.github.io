@@ -170,11 +170,7 @@
             const sellers = {};
             
             for (const product of products) {
-                const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(product)}&limit=50`, {
-                    headers: {
-                        'Authorization': `Bearer ${await getAccessToken()}`
-                    }
-                });
+                const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(product)}&limit=50`);
                 
                 if (!response.ok) throw new Error('Error en la búsqueda de productos');
                 
