@@ -10,6 +10,7 @@
             --ml-yellow: #FFE600;
             --ml-blue: #3483FA;
             --ml-dark: #333333;
+            --ml-green: #00a650;
         }
         
         body {
@@ -52,11 +53,12 @@
             margin-bottom: 20px;
         }
         
-        #productInput {
-            width: 70%;
+        #productInput, #priceLimit {
+            width: 35%;
             padding: 10px;
             border: 1px solid #ddd;
             border-radius: 4px;
+            margin-right: 10px;
         }
         
         button {
@@ -119,6 +121,19 @@
             margin-top: 20px;
             margin-bottom: 10px;
         }
+        
+        .full-seller {
+            color: var(--ml-green);
+            font-weight: bold;
+        }
+        
+        .full-seller::after {
+            content: " ⚡";
+        }
+        
+        .product-selector {
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -134,6 +149,7 @@
                 <h1>Encuentra vendedores en Mercado Libre</h1>
                 
                 <input type="text" id="productInput" placeholder="Ingrese un producto">
+                <input type="number" id="priceLimit" placeholder="Precio límite (opcional)">
                 <button onclick="addProduct()">Agregar Producto</button>
                 
                 <ul id="productsList"></ul>
@@ -160,10 +176,12 @@
 
         function addProduct() {
             const product = document.getElementById('productInput').value;
+            const priceLimit = document.getElementById('priceLimit').value;
             if (product) {
-                products.push(product);
+                products.push({name: product, priceLimit: priceLimit ? parseFloat(priceLimit) : null});
                 updateProductList();
                 document.getElementById('productInput').value = '';
+                document.getElementById('priceLimit').value = '';
             }
         }
 
@@ -173,7 +191,7 @@
             products.forEach((product, index) => {
                 const li = document.createElement('li');
                 li.innerHTML = `
-                    ${product}
+                    ${product.name} ${product.priceLimit ? `(Límite: $${product.priceLimit})` : ''}
                     <button class="delete-btn" onclick="deleteProduct(${index})">Eliminar</button>
                 `;
                 list.appendChild(li);
@@ -201,15 +219,23 @@
 
         async function findSellers() {
             const sellers = {};
+            const fullSeller = {
+                name: "Envío Full",
+                products: {},
+                totalMatches: 0,
+                isFull: true
+            };
             
             for (const product of products) {
-                const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(product)}&limit=50`);
+                const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(product.name)}&limit=50`);
                 
                 if (!response.ok) throw new Error('Error en la búsqueda de productos');
                 
                 const data = await response.json();
                 
                 data.results.forEach(item => {
+                    if (product.priceLimit && item.price > product.priceLimit) return;
+                    
                     if (!sellers[item.seller.id]) {
                         sellers[item.seller.id] = {
                             name: item.seller.nickname,
@@ -219,19 +245,37 @@
                         };
                     }
                     
-                    if (!sellers[item.seller.id].products[product]) {
-                        sellers[item.seller.id].products[product] = {
+                    if (!sellers[item.seller.id].products[product.name]) {
+                        sellers[item.seller.id].products[product.name] = [];
+                    }
+                    
+                    sellers[item.seller.id].products[product.name].push({
+                        title: item.title,
+                        price: item.price,
+                        currency: item.currency_id,
+                        link: item.permalink
+                    });
+                    
+                    if (sellers[item.seller.id].products[product.name].length === 1) {
+                        sellers[item.seller.id].totalMatches++;
+                    }
+                    
+                    if (item.shipping.logistic_type === "fulfillment") {
+                        if (!fullSeller.products[product.name]) {
+                            fullSeller.products[product.name] = [];
+                            fullSeller.totalMatches++;
+                        }
+                        fullSeller.products[product.name].push({
                             title: item.title,
                             price: item.price,
                             currency: item.currency_id,
                             link: item.permalink
-                        };
-                        sellers[item.seller.id].totalMatches++;
+                        });
                     }
                 });
             }
             
-            return Object.values(sellers);
+            return [...Object.values(sellers), fullSeller];
         }
 
         function displaySellers() {
@@ -243,30 +287,53 @@
                 sellerCard.className = 'seller-card';
                 
                 let sellerHtml = `
-                    <h3>${seller.name}</h3>
+                    <h3 class="${seller.isFull ? 'full-seller' : ''}">${seller.name}</h3>
                     <p>Coincidencias: ${seller.totalMatches}/${products.length}</p>
-                    <p>Enlace: <a href="${seller.link}" target="_blank">Ver tienda</a></p>
+                    ${seller.link ? `<p>Enlace: <a href="${seller.link}" target="_blank">Ver tienda</a></p>` : ''}
                     <h4>Productos encontrados:</h4>
                 `;
                 
                 let totalPrice = 0;
-                for (const [product, match] of Object.entries(seller.products)) {
+                for (const [product, matches] of Object.entries(seller.products)) {
                     sellerHtml += `
                         <div class="product-match">
                             <p>Búsqueda: ${product}</p>
-                            <p>Producto: ${match.title}</p>
-                            <p>Precio: ${match.price} ${match.currency}</p>
-                            <p><a href="${match.link}" target="_blank">Ver producto</a></p>
+                            <select class="product-selector" onchange="updateTotalPrice(this, ${seller.isFull})">
+                                ${matches.map((match, index) => `
+                                    <option value="${match.price}" ${index === 0 ? 'selected' : ''}>
+                                        ${match.title} - ${match.price} ${match.currency}
+                                    </option>
+                                `).join('')}
+                            </select>
+                            <p><a href="${matches[0].link}" target="_blank">Ver producto</a></p>
                         </div>
                     `;
-                    totalPrice += match.price;
+                    totalPrice += matches[0].price;
                 }
                 
-                sellerHtml += `<p>Precio total: ${totalPrice} ${seller.products[Object.keys(seller.products)[0]].currency}</p>`;
+                sellerHtml += `<p class="total-price">Precio total: ${totalPrice} ${seller.products[Object.keys(seller.products)[0]][0].currency}</p>`;
                 
                 sellerCard.innerHTML = sellerHtml;
                 results.appendChild(sellerCard);
             });
+        }
+
+        function updateTotalPrice(select, isFull) {
+            const sellerCard = select.closest('.seller-card');
+            const totalPriceElement = sellerCard.querySelector('.total-price');
+            const selectors = sellerCard.querySelectorAll('.product-selector');
+            
+            let totalPrice = 0;
+            selectors.forEach(selector => {
+                totalPrice += parseFloat(selector.value);
+            });
+            
+            const currency = select.options[select.selectedIndex].text.split(' ').pop();
+            totalPriceElement.textContent = `Precio total: ${totalPrice.toFixed(2)} ${currency}`;
+            
+            if (isFull) {
+                sellers.find(s => s.isFull).totalPrice = totalPrice;
+            }
         }
 
         function sortSellers() {
@@ -276,8 +343,8 @@
                 sellers.sort((a, b) => b.totalMatches - a.totalMatches);
             } else if (sortBy === 'price') {
                 sellers.sort((a, b) => {
-                    const totalPriceA = Object.values(a.products).reduce((sum, product) => sum + product.price, 0);
-                    const totalPriceB = Object.values(b.products).reduce((sum, product) => sum + product.price, 0);
+                    const totalPriceA = a.isFull ? a.totalPrice : Object.values(a.products).reduce((sum, matches) => sum + matches[0].price, 0);
+                    const totalPriceB = b.isFull ? b.totalPrice : Object.values(b.products).reduce((sum, matches) => sum + matches[0].price, 0);
                     return totalPriceA - totalPriceB;
                 });
             }
