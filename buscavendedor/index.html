@@ -115,6 +115,15 @@
             padding: 10px;
             margin: 5px 0;
             border-radius: 4px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .product-image {
+            width: 100px;
+            height: 100px;
+            object-fit: contain;
+            margin-right: 10px;
         }
         
         #sortOptions {
@@ -252,8 +261,10 @@
                     sellers[item.seller.id].products[product.name].push({
                         title: item.title,
                         price: item.price,
+                        shipping: item.shipping.free_shipping ? 0 : (item.shipping.local_pick_up ? 0 : 500), // Asumimos un costo de envío de 500 si no es gratis ni retiro en persona
                         currency: item.currency_id,
-                        link: item.permalink
+                        link: item.permalink,
+                        thumbnail: item.thumbnail
                     });
                     
                     if (sellers[item.seller.id].products[product.name].length === 1) {
@@ -268,8 +279,10 @@
                         fullSeller.products[product.name].push({
                             title: item.title,
                             price: item.price,
+                            shipping: item.shipping.free_shipping ? 0 : (item.shipping.local_pick_up ? 0 : 500),
                             currency: item.currency_id,
-                            link: item.permalink
+                            link: item.permalink,
+                            thumbnail: item.thumbnail
                         });
                     }
                 });
@@ -294,24 +307,33 @@
                 `;
                 
                 let totalPrice = 0;
+                let totalShipping = 0;
                 for (const [product, matches] of Object.entries(seller.products)) {
                     sellerHtml += `
                         <div class="product-match">
-                            <p>Búsqueda: ${product}</p>
-                            <select class="product-selector" onchange="updateTotalPrice(this, ${seller.isFull})">
-                                ${matches.map((match, index) => `
-                                    <option value="${match.price}" ${index === 0 ? 'selected' : ''}>
-                                        ${match.title} - ${match.price} ${match.currency}
-                                    </option>
-                                `).join('')}
-                            </select>
-                            <p><a href="${matches[0].link}" target="_blank">Ver producto</a></p>
+                            <img src="${matches[0].thumbnail}" alt="${matches[0].title}" class="product-image">
+                            <div>
+                                <p>Búsqueda: ${product}</p>
+                                <select class="product-selector" onchange="updateTotalPrice(this, ${seller.isFull})">
+                                    ${matches.map((match, index) => `
+                                        <option value="${match.price},${match.shipping}" ${index === 0 ? 'selected' : ''}>
+                                            ${match.title} - ${match.price} ${match.currency} + Envío: ${match.shipping} ${match.currency}
+                                        </option>
+                                    `).join('')}
+                                </select>
+                                <p><a href="${matches[0].link}" target="_blank">Ver producto</a></p>
+                            </div>
                         </div>
                     `;
                     totalPrice += matches[0].price;
+                    totalShipping += matches[0].shipping;
                 }
                 
-                sellerHtml += `<p class="total-price">Precio total: ${totalPrice} ${seller.products[Object.keys(seller.products)[0]][0].currency}</p>`;
+                sellerHtml += `
+                    <p class="total-price">Precio total de productos: ${totalPrice} ${seller.products[Object.keys(seller.products)[0]][0].currency}</p>
+                    <p class="total-shipping">Costo total de envío: ${totalShipping} ${seller.products[Object.keys(seller.products)[0]][0].currency}</p>
+                    <p class="grand-total">Total (productos + envío): ${totalPrice + totalShipping} ${seller.products[Object.keys(seller.products)[0]][0].currency}</p>
+                `;
                 
                 sellerCard.innerHTML = sellerHtml;
                 results.appendChild(sellerCard);
@@ -321,18 +343,26 @@
         function updateTotalPrice(select, isFull) {
             const sellerCard = select.closest('.seller-card');
             const totalPriceElement = sellerCard.querySelector('.total-price');
+            const totalShippingElement = sellerCard.querySelector('.total-shipping');
+            const grandTotalElement = sellerCard.querySelector('.grand-total');
             const selectors = sellerCard.querySelectorAll('.product-selector');
             
             let totalPrice = 0;
+            let totalShipping = 0;
             selectors.forEach(selector => {
-                totalPrice += parseFloat(selector.value);
+                const [price, shipping] = selector.value.split(',');
+                totalPrice += parseFloat(price);
+                totalShipping += parseFloat(shipping);
             });
             
             const currency = select.options[select.selectedIndex].text.split(' ').pop();
-            totalPriceElement.textContent = `Precio total: ${totalPrice.toFixed(2)} ${currency}`;
+            totalPriceElement.textContent = `Precio total de productos: ${totalPrice.toFixed(2)} ${currency}`;
+            totalShippingElement.textContent = `Costo total de envío: ${totalShipping.toFixed(2)} ${currency}`;
+            grandTotalElement.textContent = `Total (productos + envío): ${(totalPrice + totalShipping).toFixed(2)} ${currency}`;
             
             if (isFull) {
                 sellers.find(s => s.isFull).totalPrice = totalPrice;
+                sellers.find(s => s.isFull).totalShipping = totalShipping;
             }
         }
 
@@ -343,9 +373,11 @@
                 sellers.sort((a, b) => b.totalMatches - a.totalMatches);
             } else if (sortBy === 'price') {
                 sellers.sort((a, b) => {
-                    const totalPriceA = a.isFull ? a.totalPrice : Object.values(a.products).reduce((sum, matches) => sum + matches[0].price, 0);
-                    const totalPriceB = b.isFull ? b.totalPrice : Object.values(b.products).reduce((sum, matches) => sum + matches[0].price, 0);
-                    return totalPriceA - totalPriceB;
+                    const totalA = a.isFull ? (a.totalPrice + a.totalShipping) : 
+                        Object.values(a.products).reduce((sum, matches) => sum + matches[0].price + matches[0].shipping, 0);
+                    const totalB = b.isFull ? (b.totalPrice + b.totalShipping) : 
+                        Object.values(b.products).reduce((sum, matches) => sum + matches[0].price + matches[0].shipping, 0);
+                    return totalA - totalB;
                 });
             }
             
