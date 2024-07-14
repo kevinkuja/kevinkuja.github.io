@@ -82,6 +82,18 @@
             margin: 5px 0;
             padding: 10px;
             border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .delete-btn {
+            background-color: #ff4444;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
         }
         
         #results {
@@ -101,6 +113,11 @@
             padding: 10px;
             margin: 5px 0;
             border-radius: 4px;
+        }
+        
+        #sortOptions {
+            margin-top: 20px;
+            margin-bottom: 10px;
         }
     </style>
 </head>
@@ -124,15 +141,22 @@
                 <button onclick="searchProducts()">Buscar Vendedores</button>
             </div>
             
+            <div id="sortOptions" style="display: none;">
+                <label>Ordenar por:</label>
+                <select id="sortSelect" onchange="sortSellers()">
+                    <option value="matches">Coincidencias</option>
+                    <option value="price">Precio final</option>
+                </select>
+            </div>
+            
             <div id="results"></div>
         </div>
     </main>
 
     <script>
         let products = [];
+        let sellers = [];
         const API_BASE_URL = 'https://api.mercadolibre.com/sites/MLA';
-        const APP_ID = '2827005245704255';
-        const APP_SECRET = '20Rg5k6BEHFsZSxyitwzUW8gy0ZGMxyo';
 
         function addProduct() {
             const product = document.getElementById('productInput').value;
@@ -146,11 +170,19 @@
         function updateProductList() {
             const list = document.getElementById('productsList');
             list.innerHTML = '';
-            products.forEach(product => {
+            products.forEach((product, index) => {
                 const li = document.createElement('li');
-                li.textContent = product;
+                li.innerHTML = `
+                    ${product}
+                    <button class="delete-btn" onclick="deleteProduct(${index})">Eliminar</button>
+                `;
                 list.appendChild(li);
             });
+        }
+
+        function deleteProduct(index) {
+            products.splice(index, 1);
+            updateProductList();
         }
 
         async function searchProducts() {
@@ -158,8 +190,9 @@
             results.innerHTML = 'Buscando...';
 
             try {
-                const sellers = await findSellers();
-                displaySellers(sellers);
+                sellers = await findSellers();
+                sortSellers();
+                document.getElementById('sortOptions').style.display = 'block';
             } catch (error) {
                 results.innerHTML = 'Error al buscar productos. Intente nuevamente.';
                 console.error(error);
@@ -181,27 +214,27 @@
                         sellers[item.seller.id] = {
                             name: item.seller.nickname,
                             products: {},
+                            totalMatches: 0,
                             link: `https://www.mercadolibre.com.ar/perfil/${item.seller.nickname}`
                         };
                     }
                     
                     if (!sellers[item.seller.id].products[product]) {
-                        sellers[item.seller.id].products[product] = [];
+                        sellers[item.seller.id].products[product] = {
+                            title: item.title,
+                            price: item.price,
+                            currency: item.currency_id,
+                            link: item.permalink
+                        };
+                        sellers[item.seller.id].totalMatches++;
                     }
-                    
-                    sellers[item.seller.id].products[product].push({
-                        title: item.title,
-                        price: item.price,
-                        currency: item.currency_id,
-                        link: item.permalink
-                    });
                 });
             }
             
             return Object.values(sellers);
         }
 
-        function displaySellers(sellers) {
+        function displaySellers() {
             const results = document.getElementById('results');
             results.innerHTML = '<h2>Vendedores encontrados:</h2>';
             
@@ -211,33 +244,45 @@
                 
                 let sellerHtml = `
                     <h3>${seller.name}</h3>
+                    <p>Coincidencias: ${seller.totalMatches}/${products.length}</p>
                     <p>Enlace: <a href="${seller.link}" target="_blank">Ver tienda</a></p>
-                    <h4>Productos similares encontrados:</h4>
+                    <h4>Productos encontrados:</h4>
                 `;
                 
-                for (const [product, matches] of Object.entries(seller.products)) {
-                    matches.forEach(match => {
-                        sellerHtml += `
-                            <div class="product-match">
-                                <p>Búsqueda: ${product}</p>
-                                <p>Producto similar: ${match.title}</p>
-                                <p>Precio: ${match.price} ${match.currency}</p>
-                                <p><a href="${match.link}" target="_blank">Ver producto</a></p>
-                            </div>
-                        `;
-                    });
+                let totalPrice = 0;
+                for (const [product, match] of Object.entries(seller.products)) {
+                    sellerHtml += `
+                        <div class="product-match">
+                            <p>Búsqueda: ${product}</p>
+                            <p>Producto: ${match.title}</p>
+                            <p>Precio: ${match.price} ${match.currency}</p>
+                            <p><a href="${match.link}" target="_blank">Ver producto</a></p>
+                        </div>
+                    `;
+                    totalPrice += match.price;
                 }
+                
+                sellerHtml += `<p>Precio total: ${totalPrice} ${seller.products[Object.keys(seller.products)[0]].currency}</p>`;
                 
                 sellerCard.innerHTML = sellerHtml;
                 results.appendChild(sellerCard);
             });
         }
 
-        async function getAccessToken() {
-            // En una implementación real, esta función debería hacer una llamada a tu backend
-            // para obtener un token de acceso usando las credenciales de tu aplicación.
-            // Por ahora, simularemos esto devolviendo un token falso.
-            return 'APP_USR-8048572878203034-072016-17aa33348393b1ff5a210bb9a8869df4-237080547';
+        function sortSellers() {
+            const sortBy = document.getElementById('sortSelect').value;
+            
+            if (sortBy === 'matches') {
+                sellers.sort((a, b) => b.totalMatches - a.totalMatches);
+            } else if (sortBy === 'price') {
+                sellers.sort((a, b) => {
+                    const totalPriceA = Object.values(a.products).reduce((sum, product) => sum + product.price, 0);
+                    const totalPriceB = Object.values(b.products).reduce((sum, product) => sum + product.price, 0);
+                    return totalPriceA - totalPriceB;
+                });
+            }
+            
+            displaySellers();
         }
     </script>
 </body>
