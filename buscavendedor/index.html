@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BuscaVendedor - Mercado Libre</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --ml-yellow: #FFE600;
+            --ml-blue: #3483FA;
+            --ml-dark: #333333;
+        }
+        
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #EDEDED;
+        }
+        
+        header {
+            background-color: var(--ml-yellow);
+            padding: 10px 0;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--ml-dark);
+        }
+        
+        main {
+            padding: 20px 0;
+        }
+        
+        .search-box {
+            background-color: white;
+            border-radius: 4px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        }
+        
+        h1, h2 {
+            color: var(--ml-dark);
+            margin-bottom: 20px;
+        }
+        
+        #productInput {
+            width: 70%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        button {
+            background-color: var(--ml-blue);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background-color: #2968c8;
+        }
+        
+        #productsList {
+            list-style-type: none;
+            padding: 0;
+        }
+        
+        #productsList li {
+            background-color: #f5f5f5;
+            margin: 5px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        
+        #results {
+            margin-top: 20px;
+        }
+        
+        .seller-card {
+            background-color: white;
+            border-radius: 4px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        }
+        
+        .product-match {
+            background-color: #f5f5f5;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">BuscaVendedor</div>
+        </div>
+    </header>
+    
+    <main>
+        <div class="container">
+            <div class="search-box">
+                <h1>Encuentra vendedores en Mercado Libre</h1>
+                
+                <input type="text" id="productInput" placeholder="Ingrese un producto">
+                <button onclick="addProduct()">Agregar Producto</button>
+                
+                <ul id="productsList"></ul>
+                
+                <button onclick="searchProducts()">Buscar Vendedores</button>
+            </div>
+            
+            <div id="results"></div>
+        </div>
+    </main>
+
+    <script>
+        let products = [];
+        const API_BASE_URL = 'https://api.mercadolibre.com/sites/MLA';
+        const APP_ID = 'TU_APP_ID';
+        const APP_SECRET = 'TU_APP_SECRET';
+
+        function addProduct() {
+            const product = document.getElementById('productInput').value;
+            if (product) {
+                products.push(product);
+                updateProductList();
+                document.getElementById('productInput').value = '';
+            }
+        }
+
+        function updateProductList() {
+            const list = document.getElementById('productsList');
+            list.innerHTML = '';
+            products.forEach(product => {
+                const li = document.createElement('li');
+                li.textContent = product;
+                list.appendChild(li);
+            });
+        }
+
+        async function searchProducts() {
+            const results = document.getElementById('results');
+            results.innerHTML = 'Buscando...';
+
+            try {
+                const sellers = await findSellers();
+                displaySellers(sellers);
+            } catch (error) {
+                results.innerHTML = 'Error al buscar productos. Intente nuevamente.';
+                console.error(error);
+            }
+        }
+
+        async function findSellers() {
+            const sellers = {};
+            
+            for (const product of products) {
+                const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(product)}&limit=50`, {
+                    headers: {
+                        'Authorization': `Bearer ${await getAccessToken()}`
+                    }
+                });
+                
+                if (!response.ok) throw new Error('Error en la búsqueda de productos');
+                
+                const data = await response.json();
+                
+                data.results.forEach(item => {
+                    if (!sellers[item.seller.id]) {
+                        sellers[item.seller.id] = {
+                            name: item.seller.nickname,
+                            products: {},
+                            link: `https://www.mercadolibre.com.ar/perfil/${item.seller.nickname}`
+                        };
+                    }
+                    
+                    if (!sellers[item.seller.id].products[product]) {
+                        sellers[item.seller.id].products[product] = [];
+                    }
+                    
+                    sellers[item.seller.id].products[product].push({
+                        title: item.title,
+                        price: item.price,
+                        currency: item.currency_id,
+                        link: item.permalink
+                    });
+                });
+            }
+            
+            return Object.values(sellers);
+        }
+
+        function displaySellers(sellers) {
+            const results = document.getElementById('results');
+            results.innerHTML = '<h2>Vendedores encontrados:</h2>';
+            
+            sellers.forEach(seller => {
+                const sellerCard = document.createElement('div');
+                sellerCard.className = 'seller-card';
+                
+                let sellerHtml = `
+                    <h3>${seller.name}</h3>
+                    <p>Enlace: <a href="${seller.link}" target="_blank">Ver tienda</a></p>
+                    <h4>Productos similares encontrados:</h4>
+                `;
+                
+                for (const [product, matches] of Object.entries(seller.products)) {
+                    matches.forEach(match => {
+                        sellerHtml += `
+                            <div class="product-match">
+                                <p>Búsqueda: ${product}</p>
+                                <p>Producto similar: ${match.title}</p>
+                                <p>Precio: ${match.price} ${match.currency}</p>
+                                <p><a href="${match.link}" target="_blank">Ver producto</a></p>
+                            </div>
+                        `;
+                    });
+                }
+                
+                sellerCard.innerHTML = sellerHtml;
+                results.appendChild(sellerCard);
+            });
+        }
+
+        async function getAccessToken() {
+            // En una implementación real, esta función debería hacer una llamada a tu backend
+            // para obtener un token de acceso usando las credenciales de tu aplicación.
+            // Por ahora, simularemos esto devolviendo un token falso.
+            return 'APP_USR-8048572878203034-072016-17aa33348393b1ff5a210bb9a8869df4-237080547';
+        }
+    </script>
+</body>
+</html>
